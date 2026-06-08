@@ -2,10 +2,10 @@
 
 // PDO database verbinding voor Docker
 
-$host = 'db';        // Moet hetzelfde zijn als de database service in docker-compose.yml
-$db   = 'mydb';      // Moet hetzelfde zijn als MYSQL_DATABASE
-$user = 'user';      // Moet hetzelfde zijn als MYSQL_USER
-$pass = 'test';      // Moet hetzelfde zijn als MYSQL_PASSWORD
+$host = 'db';
+$db   = 'mydb';
+$user = 'user';
+$pass = 'test';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
@@ -16,7 +16,6 @@ $options = [
     PDO::ATTR_EMULATE_PREPARES   => false,
 ];
 
-// Kleine retry-loop, omdat MySQL soms iets later klaar is dan Apache/PHP
 $maxAttempts = 20;
 $attempt = 0;
 
