@@ -29,7 +29,7 @@ while (true) {
         if ($attempt >= $maxAttempts) {
             die(
                 "Database verbinding mislukt na {$maxAttempts} pogingen.<br>" .
-                "Foutmelding: " . htmlspecialchars($e->getMessage())
+                "Foutmelding: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8')
             );
         }
 
