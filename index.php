@@ -26,15 +26,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } elseif (strlen($password) > 255) {
         $error = "Wachtwoord is te lang.";
     } else {
-        /*
-            SQL-injectie oplossing:
-            Voorheen stond hier kwetsbare code zoals:
-
-            SELECT * FROM user WHERE username = '$username' AND password = '$password'
-
-            Dat is gevaarlijk, omdat invoer dan als SQL-code kan worden uitgevoerd.
-            Nu gebruiken we een prepared statement.
-        */
+        // Veilig tegen SQL-injectie: prepared statement
         $stmt = $pdo->prepare(
             "SELECT id, username, password, balance, isAdmin
              FROM `user`
@@ -52,7 +44,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             Let op:
             De wachtwoorden staan in deze les-app nog als platte tekst in de database.
             Dat hoort bij de latere opdracht over cryptografie/wachtwoorden.
-            Voor fase 1 lossen we vooral SQL-injectie op.
         */
         if ($user && hash_equals((string)$user['password'], (string)$password)) {
             session_regenerate_id(true);
@@ -70,7 +61,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             header("Location: dashboard.php");
             exit;
         } else {
-            // Algemene foutmelding, geen SQL-query of database-informatie tonen
             $error = "Gebruikersnaam of wachtwoord is onjuist.";
         }
     }
