@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/validation.php';
 
 requireLogin();
 
@@ -19,19 +20,21 @@ if ($saldo === false) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $ontvangerNaam = trim($_POST['ontvanger'] ?? '');
-    $bedrag = $_POST['bedrag'] ?? '';
-    $omschrijving = trim($_POST['omschrijving'] ?? '');
+    $receiverValidation = validateReceiverName($_POST['ontvanger'] ?? '');
+    $amountValidation = normalizeMoneyAmount($_POST['bedrag'] ?? '');
+    $descriptionValidation = validateTransferDescription($_POST['omschrijving'] ?? '');
 
-    if ($ontvangerNaam === '' || $bedrag === '' || $omschrijving === '') {
-        $error = "Vul alle velden in.";
-    } elseif (strlen($ontvangerNaam) > 50) {
-        $error = "De naam van de ontvanger is te lang.";
-    } elseif (strlen($omschrijving) > 500) {
-        $error = "De omschrijving is te lang.";
-    } elseif (!is_numeric($bedrag) || (float)$bedrag <= 0) {
-        $error = "Vul een geldig positief bedrag in.";
+    if (!$receiverValidation['valid']) {
+        $error = $receiverValidation['error'];
+    } elseif (!$amountValidation['valid']) {
+        $error = $amountValidation['error'];
+    } elseif (!$descriptionValidation['valid']) {
+        $error = $descriptionValidation['error'];
     } else {
+        $ontvangerNaam = $receiverValidation['value'];
+        $bedrag = $amountValidation['amount'];
+        $omschrijving = $descriptionValidation['value'];
+
         $stmt = $pdo->prepare("SELECT id, username, balance FROM `user` WHERE username = ? LIMIT 1");
         $stmt->execute([$ontvangerNaam]);
         $ontvanger = $stmt->fetch();
@@ -40,46 +43,68 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $error = "Deze gebruiker bestaat niet.";
         } elseif ((int)$ontvanger['id'] === $userId) {
             $error = "Je kunt geen geld naar jezelf overmaken.";
-        } elseif ((float)$saldo < (float)$bedrag) {
-            $error = "Je hebt niet genoeg saldo om dit bedrag over te maken.";
         } else {
             try {
                 $pdo->beginTransaction();
 
-                $stmt = $pdo->prepare(
-                    "INSERT INTO `transaction` (sender, receiver, amount, description)
-                     VALUES (?, ?, ?, ?)"
-                );
-                $stmt->execute([
-                    $userId,
-                    (int)$ontvanger['id'],
-                    (float)$bedrag,
-                    $omschrijving
-                ]);
-
-                $stmt = $pdo->prepare("UPDATE `user` SET balance = balance + ? WHERE id = ?");
-                $stmt->execute([
-                    (float)$bedrag,
-                    (int)$ontvanger['id']
-                ]);
-
-                $stmt = $pdo->prepare("UPDATE `user` SET balance = balance - ? WHERE id = ?");
-                $stmt->execute([
-                    (float)$bedrag,
-                    $userId
-                ]);
-
-                $pdo->commit();
-
-                $stmt = $pdo->prepare("SELECT balance FROM `user` WHERE id = ?");
+                // Haal saldo opnieuw op met lock zodat het saldo tijdens de transactie klopt.
+                $stmt = $pdo->prepare("SELECT balance FROM `user` WHERE id = ? FOR UPDATE");
                 $stmt->execute([$userId]);
-                $saldo = $stmt->fetchColumn();
+                $currentBalance = $stmt->fetchColumn();
 
-                $_SESSION['user']['balance'] = $saldo;
+                if ($currentBalance === false) {
+                    throw new Exception("Gebruiker niet gevonden.");
+                }
 
-                $success = "Het bedrag is succesvol overgemaakt.";
+                if ((float)$currentBalance < (float)$bedrag) {
+                    $pdo->rollBack();
+                    $error = "Je hebt niet genoeg saldo om dit bedrag over te maken.";
+                } else {
+                    $stmt = $pdo->prepare("SELECT id FROM `user` WHERE id = ? FOR UPDATE");
+                    $stmt->execute([(int)$ontvanger['id']]);
+
+                    if (!$stmt->fetch()) {
+                        throw new Exception("Ontvanger niet gevonden.");
+                    }
+
+                    $stmt = $pdo->prepare(
+                        "INSERT INTO `transaction` (sender, receiver, amount, description)
+                         VALUES (?, ?, ?, ?)"
+                    );
+                    $stmt->execute([
+                        $userId,
+                        (int)$ontvanger['id'],
+                        $bedrag,
+                        $omschrijving
+                    ]);
+
+                    $stmt = $pdo->prepare("UPDATE `user` SET balance = balance + ? WHERE id = ?");
+                    $stmt->execute([
+                        $bedrag,
+                        (int)$ontvanger['id']
+                    ]);
+
+                    $stmt = $pdo->prepare("UPDATE `user` SET balance = balance - ? WHERE id = ?");
+                    $stmt->execute([
+                        $bedrag,
+                        $userId
+                    ]);
+
+                    $pdo->commit();
+
+                    $stmt = $pdo->prepare("SELECT balance FROM `user` WHERE id = ?");
+                    $stmt->execute([$userId]);
+                    $saldo = $stmt->fetchColumn();
+
+                    $_SESSION['user']['balance'] = $saldo;
+
+                    $success = "Het bedrag is succesvol overgemaakt.";
+                }
             } catch (Exception $e) {
-                $pdo->rollBack();
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+
                 $error = "Er ging iets mis bij het overmaken.";
             }
         }
@@ -134,6 +159,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 name="ontvanger"
                                 required
                                 maxlength="50"
+                                pattern="[a-zA-Z0-9_]+"
+                                title="Alleen letters, cijfers en underscores zijn toegestaan."
                                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
                             >
                         </div>
@@ -148,9 +175,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 name="bedrag"
                                 step="0.01"
                                 min="0.01"
+                                max="10000"
                                 required
                                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
                             >
+                            <p class="text-xs text-gray-500 mt-1">
+                                Alleen positieve bedragen tussen €0,01 en €10.000,00 zijn toegestaan.
+                            </p>
                         </div>
 
                         <div class="mb-4">
@@ -162,6 +193,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 id="omschrijving"
                                 name="omschrijving"
                                 required
+                                minlength="2"
                                 maxlength="500"
                                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
                             >
