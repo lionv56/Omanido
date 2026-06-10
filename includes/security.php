@@ -65,19 +65,23 @@ function validateStrongPassword(string $password, string $username = ''): array
     return $errors;
 }
 
-function verifyStoredPassword(string $inputPassword, string $storedPassword): bool
-{
-    $info = password_get_info($storedPassword);
-
-    if ($info['algo'] !== 0) {
-        return password_verify($inputPassword, $storedPassword);
-    }
-
-    // Alleen voor oude bestaande data die nog plaintext is.
-    return hash_equals($storedPassword, $inputPassword);
-}
-
 function hashPassword(string $password): string
 {
     return password_hash($password, PASSWORD_DEFAULT);
+}
+
+function isPasswordHash(string $storedPassword): bool
+{
+    $info = password_get_info($storedPassword);
+    return $info['algo'] !== 0;
+}
+
+function verifyStoredPassword(string $inputPassword, string $storedPassword): bool
+{
+    if (isPasswordHash($storedPassword)) {
+        return password_verify($inputPassword, $storedPassword);
+    }
+
+    // Alleen voor oude bestaande plaintext wachtwoorden.
+    return hash_equals($storedPassword, $inputPassword);
 }

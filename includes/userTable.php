@@ -1,39 +1,38 @@
 <?php
 
-// Let op:
-// Geen session_start() in dit bestand.
-// Geen require_once 'includes/db.php' in dit bestand.
-// Dit bestand wordt geladen vanuit index.php nadat db.php al geladen is.
-
 require_once __DIR__ . '/security.php';
 
-function omanidoTableExists(PDO $pdo, string $tableName): bool
-{
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-    ");
+if (!function_exists('omanidoTableExists')) {
+    function omanidoTableExists(PDO $pdo, string $tableName): bool
+    {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = ?
+        ");
 
-    $stmt->execute([$tableName]);
+        $stmt->execute([$tableName]);
 
-    return (int)$stmt->fetchColumn() > 0;
+        return (int)$stmt->fetchColumn() > 0;
+    }
 }
 
-function omanidoColumnExists(PDO $pdo, string $tableName, string $columnName): bool
-{
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-        AND COLUMN_NAME = ?
-    ");
+if (!function_exists('omanidoColumnExists')) {
+    function omanidoColumnExists(PDO $pdo, string $tableName, string $columnName): bool
+    {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = ?
+            AND COLUMN_NAME = ?
+        ");
 
-    $stmt->execute([$tableName, $columnName]);
+        $stmt->execute([$tableName, $columnName]);
 
-    return (int)$stmt->fetchColumn() > 0;
+        return (int)$stmt->fetchColumn() > 0;
+    }
 }
 
 if (!omanidoTableExists($pdo, 'user')) {
@@ -73,7 +72,7 @@ if (!omanidoTableExists($pdo, 'user')) {
     }
 }
 
-// Veilige standaardaccounts voor fase 4.
+// Veilige standaardaccounts.
 // Oude zwakke wachtwoorden worden vervangen door sterke gehashte wachtwoorden.
 $defaultUsers = [
     [
@@ -161,5 +160,34 @@ foreach ($defaultUsers as $defaultUser) {
                 $defaultUser['username']
             ]);
         }
+    }
+}
+
+// Extra migratie:
+// Als er nog zelf aangemaakte gebruikers met plaintext wachtwoorden bestaan,
+// worden die automatisch omgezet naar een hash.
+$stmt = $pdo->query("
+    SELECT id, password
+    FROM `user`
+");
+
+$allUsers = $stmt->fetchAll();
+
+foreach ($allUsers as $user) {
+    $storedPassword = (string)$user['password'];
+
+    if (!isPasswordHash($storedPassword)) {
+        $hashedPassword = hashPassword($storedPassword);
+
+        $updateStmt = $pdo->prepare("
+            UPDATE `user`
+            SET password = ?
+            WHERE id = ?
+        ");
+
+        $updateStmt->execute([
+            $hashedPassword,
+            (int)$user['id']
+        ]);
     }
 }

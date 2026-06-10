@@ -3,6 +3,7 @@ session_start();
 
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/security.php';
+require_once __DIR__ . '/includes/userTable.php';
 
 $error = '';
 $success = '';
@@ -28,18 +29,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if (!empty($passwordErrors)) {
             $error = implode(" ", $passwordErrors);
         } else {
-            $stmt = $pdo->prepare("SELECT id FROM `user` WHERE username = ? LIMIT 1");
+            $stmt = $pdo->prepare("
+                SELECT id
+                FROM `user`
+                WHERE username = ?
+                LIMIT 1
+            ");
+
             $stmt->execute([$username]);
 
             if ($stmt->rowCount() === 0) {
                 $passwordHash = hashPassword($password);
 
-                $stmt = $pdo->prepare(
-                    "INSERT INTO `user`
+                $stmt = $pdo->prepare("
+                    INSERT INTO `user`
                         (username, password, balance, isAdmin, failed_attempts, locked_until)
-                     VALUES
-                        (?, ?, 100, 0, 0, NULL)"
-                );
+                    VALUES
+                        (?, ?, 100, 0, 0, NULL)
+                ");
 
                 $stmt->execute([
                     $username,

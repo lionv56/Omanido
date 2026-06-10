@@ -4,7 +4,7 @@ session_start();
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/security.php';
 
-// Tabellen aanmaken als ze nog niet bestaan
+// Tabellen aanmaken / migreren als ze nog niet bestaan
 require_once __DIR__ . '/includes/userTable.php';
 require_once __DIR__ . '/includes/transactionTable.php';
 
@@ -100,20 +100,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if ($loginAllowed && $user && verifyStoredPassword($password, (string)$user['password'])) {
             if (isCommonPassword($password)) {
-                $error = "Dit wachtwoord is niet meer toegestaan. Maak een nieuw sterk wachtwoord aan.";
+                $error = "Dit wachtwoord is niet meer toegestaan. Gebruik een sterk wachtwoord.";
             } else {
-                if (password_needs_rehash((string)$user['password'], PASSWORD_DEFAULT)) {
+                if (!isPasswordHash((string)$user['password']) || password_needs_rehash((string)$user['password'], PASSWORD_DEFAULT)) {
                     $newHash = hashPassword($password);
 
-                    $stmt = $pdo->prepare("UPDATE `user` SET password = ? WHERE id = ?");
-                    $stmt->execute([$newHash, (int)$user['id']]);
+                    $stmt = $pdo->prepare("
+                        UPDATE `user`
+                        SET password = ?
+                        WHERE id = ?
+                    ");
+
+                    $stmt->execute([
+                        $newHash,
+                        (int)$user['id']
+                    ]);
                 }
 
                 $stmt = $pdo->prepare("
                     UPDATE `user`
-                    SET failed_attempts = 0, locked_until = NULL
+                    SET failed_attempts = 0,
+                        locked_until = NULL
                     WHERE id = ?
                 ");
+
                 $stmt->execute([(int)$user['id']]);
 
                 resetSessionLoginFailures($username);
@@ -145,7 +155,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 $stmt = $pdo->prepare("
                     UPDATE `user`
-                    SET failed_attempts = ?, locked_until = ?
+                    SET failed_attempts = ?,
+                        locked_until = ?
                     WHERE id = ?
                 ");
 
