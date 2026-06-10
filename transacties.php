@@ -1,32 +1,30 @@
 <?php
-session_start();
-
 require_once __DIR__ . '/includes/db.php';
-require_once __DIR__ . '/includes/security.php';
+require_once __DIR__ . '/includes/auth.php';
 
-if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
-    header("Location: index.php");
-    exit;
-}
+requireLogin();
 
-$currentUserId = (int)$_SESSION['user']['id'];
-$isAdmin = isset($_SESSION['user']['isAdmin']) && (int)$_SESSION['user']['isAdmin'] === 1;
-
-if (!$isAdmin && isset($_GET['id'])) {
-    header("Location: transacties.php");
-    exit;
-}
-
+$currentUserId = currentUserId();
 $viewUserId = $currentUserId;
 
-if ($isAdmin && isset($_GET['id'])) {
-    if (ctype_digit((string)$_GET['id'])) {
-        $viewUserId = (int)$_GET['id'];
-    } else {
+// Normale gebruikers mogen geen id in de URL gebruiken.
+// Zij mogen alleen hun eigen transacties zien.
+if (!isAdmin() && isset($_GET['id'])) {
+    redirectTo('transacties.php');
+}
+
+// Alleen admins mogen via id een andere gebruiker bekijken.
+if (isAdmin() && isset($_GET['id'])) {
+    if (!ctype_digit((string)$_GET['id'])) {
         http_response_code(400);
         die("Ongeldige gebruiker.");
     }
+
+    $viewUserId = (int)$_GET['id'];
 }
+
+// Extra server-side autorisatiecheck
+requireOwnerOrAdmin($viewUserId);
 
 $stmt = $pdo->prepare("SELECT id, username, balance FROM `user` WHERE id = ? LIMIT 1");
 $stmt->execute([$viewUserId]);
@@ -35,11 +33,6 @@ $user = $stmt->fetch();
 if (!$user) {
     http_response_code(404);
     die("Gebruiker niet gevonden.");
-}
-
-if (!$isAdmin && (int)$user['id'] !== $currentUserId) {
-    http_response_code(403);
-    die("Geen toegang tot deze gegevens.");
 }
 
 $stmt = $pdo->prepare(

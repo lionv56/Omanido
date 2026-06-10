@@ -1,18 +1,13 @@
 <?php
-session_start();
-
 require_once __DIR__ . '/includes/db.php';
-require_once __DIR__ . '/includes/security.php';
+require_once __DIR__ . '/includes/auth.php';
 
-if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
-    header("Location: index.php");
-    exit;
-}
+requireLogin();
 
 $error = '';
 $success = '';
 
-$userId = (int)$_SESSION['user']['id'];
+$userId = currentUserId();
 
 $stmt = $pdo->prepare("SELECT balance FROM `user` WHERE id = ?");
 $stmt->execute([$userId]);
@@ -20,8 +15,7 @@ $saldo = $stmt->fetchColumn();
 
 if ($saldo === false) {
     session_destroy();
-    header("Location: index.php");
-    exit;
+    redirectTo('index.php');
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
@@ -35,8 +29,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $error = "De naam van de ontvanger is te lang.";
     } elseif (strlen($omschrijving) > 500) {
         $error = "De omschrijving is te lang.";
-    } elseif (!is_numeric($bedrag)) {
-        $error = "Vul een geldig bedrag in.";
+    } elseif (!is_numeric($bedrag) || (float)$bedrag <= 0) {
+        $error = "Vul een geldig positief bedrag in.";
     } else {
         $stmt = $pdo->prepare("SELECT id, username, balance FROM `user` WHERE username = ? LIMIT 1");
         $stmt->execute([$ontvangerNaam]);
@@ -59,19 +53,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $stmt->execute([
                     $userId,
                     (int)$ontvanger['id'],
-                    $bedrag,
+                    (float)$bedrag,
                     $omschrijving
                 ]);
 
                 $stmt = $pdo->prepare("UPDATE `user` SET balance = balance + ? WHERE id = ?");
                 $stmt->execute([
-                    $bedrag,
+                    (float)$bedrag,
                     (int)$ontvanger['id']
                 ]);
 
                 $stmt = $pdo->prepare("UPDATE `user` SET balance = balance - ? WHERE id = ?");
                 $stmt->execute([
-                    $bedrag,
+                    (float)$bedrag,
                     $userId
                 ]);
 
@@ -153,6 +147,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                 id="bedrag"
                                 name="bedrag"
                                 step="0.01"
+                                min="0.01"
                                 required
                                 class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
                             >

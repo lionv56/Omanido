@@ -1,20 +1,8 @@
 <?php
-session_start();
-
 require_once __DIR__ . '/includes/db.php';
-require_once __DIR__ . '/includes/security.php';
+require_once __DIR__ . '/includes/auth.php';
 
-if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
-    header("Location: index.php");
-    exit;
-}
-
-$isAdmin = isset($_SESSION['user']['isAdmin']) && (int)$_SESSION['user']['isAdmin'] === 1;
-
-if (!$isAdmin) {
-    http_response_code(403);
-    die("Geen toegang tot deze pagina.");
-}
+requireAdmin();
 
 $stmt = $pdo->prepare("SELECT id, username, balance, isAdmin FROM `user` ORDER BY id ASC");
 $stmt->execute();
