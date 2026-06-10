@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/security.php';
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
     header("Location: index.php");
@@ -13,7 +14,6 @@ $success = '';
 
 $userId = (int)$_SESSION['user']['id'];
 
-// Haal altijd het actuele saldo uit de database
 $stmt = $pdo->prepare("SELECT balance FROM `user` WHERE id = ?");
 $stmt->execute([$userId]);
 $saldo = $stmt->fetchColumn();
@@ -31,6 +31,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if ($ontvangerNaam === '' || $bedrag === '' || $omschrijving === '') {
         $error = "Vul alle velden in.";
+    } elseif (strlen($ontvangerNaam) > 50) {
+        $error = "De naam van de ontvanger is te lang.";
+    } elseif (strlen($omschrijving) > 500) {
+        $error = "De omschrijving is te lang.";
+    } elseif (!is_numeric($bedrag)) {
+        $error = "Vul een geldig bedrag in.";
     } else {
         $stmt = $pdo->prepare("SELECT id, username, balance FROM `user` WHERE username = ? LIMIT 1");
         $stmt->execute([$ontvangerNaam]);
@@ -112,7 +118,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     </p>
 
                     <div class="text-center">
-                        <!-- Geen id meer in de URL -->
                         <a href="transacties.php" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
                             Transactieoverzicht
                         </a>
@@ -124,7 +129,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 <div class="bg-white p-6 rounded-lg shadow-md h-full">
                     <h3 class="font-bold text-xl mb-4">Geld Overmaken</h3>
 
-                    <form action="<?= htmlspecialchars($_SERVER["PHP_SELF"], ENT_QUOTES, 'UTF-8') ?>" method="post">
+                    <form action="<?= e($_SERVER["PHP_SELF"]) ?>" method="post">
                         <div class="mb-4">
                             <label for="ontvanger" class="block text-sm font-medium text-gray-700">
                                 Ontvanger:
@@ -175,13 +180,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                         <?php if ($error !== ''): ?>
                             <p class="text-red-500 text-sm mt-2">
-                                <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+                                <?= e($error) ?>
                             </p>
                         <?php endif; ?>
 
                         <?php if ($success !== ''): ?>
                             <p class="text-green-500 text-sm mt-2">
-                                <?= htmlspecialchars($success, ENT_QUOTES, 'UTF-8') ?>
+                                <?= e($success) ?>
                             </p>
                         <?php endif; ?>
                     </form>

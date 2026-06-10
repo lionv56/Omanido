@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/security.php';
+
 $isLoggedIn = isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true;
 $username = $isLoggedIn && isset($_SESSION['user']['username']) ? $_SESSION['user']['username'] : '';
 $isAdmin = $isLoggedIn && isset($_SESSION['user']['isAdmin']) && (int)$_SESSION['user']['isAdmin'] === 1;
@@ -16,7 +18,6 @@ $isAdmin = $isLoggedIn && isset($_SESSION['user']['isAdmin']) && (int)$_SESSION[
                     Dashboard
                 </a>
 
-                <!-- Geen user-id meer in de URL -->
                 <a href="transacties.php" class="text-blue-600 hover:underline">
                     Mijn transacties
                 </a>
@@ -28,7 +29,7 @@ $isAdmin = $isLoggedIn && isset($_SESSION['user']['isAdmin']) && (int)$_SESSION[
                 <?php endif; ?>
 
                 <span class="text-gray-500">
-                    Welkom, <?= htmlspecialchars($username, ENT_QUOTES, 'UTF-8') ?>
+                    Welkom, <?= e($username) ?>
                 </span>
 
                 <a href="logout.php" class="text-red-600 hover:underline">

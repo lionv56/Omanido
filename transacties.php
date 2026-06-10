@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/security.php';
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
     header("Location: index.php");
@@ -11,11 +12,6 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
 $currentUserId = (int)$_SESSION['user']['id'];
 $isAdmin = isset($_SESSION['user']['isAdmin']) && (int)$_SESSION['user']['isAdmin'] === 1;
 
-/*
-    Fase 2 oplossing:
-    Normale gebruikers mogen geen id meer via de URL gebruiken.
-    Zij zien altijd alleen hun eigen transacties op basis van de sessie.
-*/
 if (!$isAdmin && isset($_GET['id'])) {
     header("Location: transacties.php");
     exit;
@@ -23,7 +19,6 @@ if (!$isAdmin && isset($_GET['id'])) {
 
 $viewUserId = $currentUserId;
 
-// Alleen admins mogen eventueel een gebruiker bekijken via id
 if ($isAdmin && isset($_GET['id'])) {
     if (ctype_digit((string)$_GET['id'])) {
         $viewUserId = (int)$_GET['id'];
@@ -64,18 +59,13 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute([$viewUserId]);
 $incomingTransactions = $stmt->fetchAll();
-
-function safe($value): string
-{
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-}
 ?>
 <!DOCTYPE html>
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= safe($user['username']) ?> | Omanido</title>
+    <title><?= e($user['username']) ?> | Omanido</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.15/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100">
@@ -89,7 +79,7 @@ function safe($value): string
             </div>
 
             <h2 class="text-lg text-center font-bold mb-6">
-                <?= safe($user['username']) ?>
+                <?= e($user['username']) ?>
             </h2>
 
             <p class="text-center mb-6">
@@ -120,7 +110,7 @@ function safe($value): string
                 <div class="bg-red-100 p-2 rounded">
                     <?php foreach ($outgoingTransactions as $transaction): ?>
                         <div class="flex justify-between mb-2">
-                            <p><?= safe($transaction['description']) ?></p>
+                            <p><?= e($transaction['description']) ?></p>
                             <p>€<?= number_format((float)$transaction['amount'], 2, ',', '.') ?></p>
                         </div>
                     <?php endforeach; ?>
@@ -141,7 +131,7 @@ function safe($value): string
                 <div class="bg-green-100 p-2 rounded">
                     <?php foreach ($incomingTransactions as $transaction): ?>
                         <div class="flex justify-between mb-2">
-                            <p><?= safe($transaction['description']) ?></p>
+                            <p><?= e($transaction['description']) ?></p>
                             <p>€<?= number_format((float)$transaction['amount'], 2, ',', '.') ?></p>
                         </div>
                     <?php endforeach; ?>

@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/security.php';
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
     header("Location: index.php");
@@ -10,7 +11,6 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
 
 $isAdmin = isset($_SESSION['user']['isAdmin']) && (int)$_SESSION['user']['isAdmin'] === 1;
 
-// Gebruikerslijst bevat gevoelige data, dus alleen admins mogen dit zien
 if (!$isAdmin) {
     http_response_code(403);
     die("Geen toegang tot deze pagina.");
@@ -19,11 +19,6 @@ if (!$isAdmin) {
 $stmt = $pdo->prepare("SELECT id, username, balance, isAdmin FROM `user` ORDER BY id ASC");
 $stmt->execute();
 $users = $stmt->fetchAll();
-
-function safe($value): string
-{
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-}
 ?>
 
 <!DOCTYPE html>
@@ -59,7 +54,7 @@ function safe($value): string
                     </td>
 
                     <td class="border-b p-2">
-                        <?= safe($user['username']) ?>
+                        <?= e($user['username']) ?>
                     </td>
 
                     <td class="border-b p-2">
