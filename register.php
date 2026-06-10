@@ -14,26 +14,42 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if ($username === '' || $password === '' || $passwordcheck === '') {
         $error = "Vul alle velden in.";
+    } elseif (strlen($username) < 3) {
+        $error = "Gebruikersnaam moet minimaal 3 tekens lang zijn.";
     } elseif (strlen($username) > 50) {
         $error = "Gebruikersnaam is te lang.";
-    } elseif (strlen($password) > 255 || strlen($passwordcheck) > 255) {
-        $error = "Wachtwoord is te lang.";
+    } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+        $error = "Gebruikersnaam mag alleen letters, cijfers en underscores bevatten.";
     } elseif ($password !== $passwordcheck) {
         $error = "De wachtwoorden komen niet overeen.";
     } else {
-        $stmt = $pdo->prepare("SELECT id FROM `user` WHERE username = ? LIMIT 1");
-        $stmt->execute([$username]);
+        $passwordErrors = validateStrongPassword($password, $username);
 
-        if ($stmt->rowCount() === 0) {
-            $stmt = $pdo->prepare(
-                "INSERT INTO `user` (username, password, balance, isAdmin)
-                 VALUES (?, ?, 100, 0)"
-            );
-            $stmt->execute([$username, $password]);
-
-            $success = "Je account is aangemaakt, je kunt nu inloggen.";
+        if (!empty($passwordErrors)) {
+            $error = implode(" ", $passwordErrors);
         } else {
-            $error = "Deze gebruikersnaam is al in gebruik.";
+            $stmt = $pdo->prepare("SELECT id FROM `user` WHERE username = ? LIMIT 1");
+            $stmt->execute([$username]);
+
+            if ($stmt->rowCount() === 0) {
+                $passwordHash = hashPassword($password);
+
+                $stmt = $pdo->prepare(
+                    "INSERT INTO `user`
+                        (username, password, balance, isAdmin, failed_attempts, locked_until)
+                     VALUES
+                        (?, ?, 100, 0, 0, NULL)"
+                );
+
+                $stmt->execute([
+                    $username,
+                    $passwordHash
+                ]);
+
+                $success = "Je account is aangemaakt, je kunt nu inloggen.";
+            } else {
+                $error = "Deze gebruikersnaam is al in gebruik.";
+            }
         }
     }
 }
@@ -100,6 +116,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     autocomplete="new-password"
                     class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 >
+                <p class="text-xs text-gray-500 mt-1">
+                    Minimaal 10 tekens, hoofdletter, kleine letter, cijfer en speciaal teken.
+                </p>
             </div>
 
             <div class="mb-6">
@@ -126,6 +145,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 </button>
             </div>
         </form>
+
+        <a href="index.php" class="block text-center text-sm text-blue-600 hover:underline mt-4">
+            Terug naar inloggen
+        </a>
     </div>
 </body>
 </html>
